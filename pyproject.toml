@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ins-cli"
+version = "0.1.0"
+description = "Instagram CLI — read via HTTP API, write via browser automation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "requests>=2.31",
+    "playwright>=1.40",
+    "Pillow>=10.0",
+]
+
+[project.scripts]
+ins = "ins_cli.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ins_cli"]
