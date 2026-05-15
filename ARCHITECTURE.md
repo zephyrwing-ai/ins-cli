@@ -144,7 +144,7 @@ ins-cli/
         ├── __init__.py   # 包标识
         ├── cli.py        # 命令行入口（argparse）
         ├── auth.py       # Cookie 管理（登录/保存/加载）
-        ├── browser.py    # 浏览器启动（Playwright + Chrome 配置文件）
+        ├── browser.py    # 浏览器启动（Playwright + 稳定版 Google Chrome 配置文件）
         ├── reader.py     # 读取操作（HTTP API 请求）
         └── writer.py     # 写入操作（浏览器自动化）
 ```
@@ -165,7 +165,7 @@ cli.py 解析命令
 
 ```
 cli.py 解析命令
-  → browser.py 启动 Playwright + 打开 Chrome
+  → browser.py 启动 Playwright + 打开稳定版 Google Chrome
     → writer.py 控制浏览器：
       1. 打开 Instagram 发帖页
       2. 上传图片

@@ -9,14 +9,37 @@ description = "Instagram CLI — read via HTTP API, write via browser automation
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+authors = [
+    { name = "zephyrwing-ai" },
+]
+keywords = ["instagram", "cli", "automation", "playwright", "chrome"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet",
+    "Topic :: Utilities",
+]
 dependencies = [
     "requests>=2.31",
     "playwright>=1.40",
     "Pillow>=10.0",
+    "browser-cookie3>=0.19",
 ]
 
 [project.scripts]
 ins = "ins_cli.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/zephyrwing-ai/ins-cli"
+Repository = "https://github.com/zephyrwing-ai/ins-cli"
+Issues = "https://github.com/zephyrwing-ai/ins-cli/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ins_cli"]

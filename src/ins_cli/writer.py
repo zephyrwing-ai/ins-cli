@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from pathlib import Path
 
@@ -23,6 +24,115 @@ def _resolve_media(media_path: str) -> Path:
     return p
 
 
+def _button(page, *names: str):
+    pattern = re.compile("|".join(re.escape(name) for name in names), re.I)
+    return page.get_by_role("button", name=pattern).first
+
+
+def _click_next(page) -> None:
+    page.locator(
+        'button:has-text("Next"), '
+        'div[role="button"]:has-text("Next"), '
+        'button:has-text("下一步"), '
+        'div[role="button"]:has-text("下一步")'
+    ).first.click()
+
+
+def _click_next_if_present(page) -> None:
+    locator = page.locator(
+        'button:has-text("Next"), '
+        'div[role="button"]:has-text("Next"), '
+        'button:has-text("下一步"), '
+        'div[role="button"]:has-text("下一步")'
+    ).first
+    if locator.count() and locator.is_visible(timeout=2000):
+        locator.click()
+
+
+def _click_share(page) -> None:
+    page.locator(
+        'button:has-text("Share"), '
+        'div[role="button"]:has-text("Share"), '
+        'button:has-text("分享"), '
+        'div[role="button"]:has-text("分享")'
+    ).first.click()
+
+
+def _open_post_composer(page) -> None:
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+    page.goto(f"{INSTAGRAM_URL}create/select/")
+    page.wait_for_load_state("domcontentloaded", timeout=15000)
+    try:
+        page.locator('input[type="file"]').first.wait_for(state="attached", timeout=8000)
+        return
+    except PlaywrightTimeoutError:
+        pass
+
+    create_btn = page.locator(
+        'a[href="/create/select/"], '
+        'a:has(svg[aria-label="New post"]), '
+        'a:has(svg[aria-label="Create"]), '
+        '[role="button"]:has(svg[aria-label="New post"]), '
+        '[role="button"]:has(svg[aria-label="Create"]), '
+        '[aria-label="Create"], '
+        '[aria-label="New post"], '
+        'svg[aria-label="New post"]'
+    ).first
+    create_btn.click(force=True)
+
+
+def _fill_caption(page, caption: str) -> None:
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+    selectors = [
+        '[aria-label="Write a caption..."]',
+        '[aria-label="Write a caption…"]',
+        '[aria-label="撰写说明文字……"]',
+        '[aria-label="撰写说明文字..."]',
+        'textarea[placeholder="Write a caption..."]',
+        'textarea[placeholder="Write a caption…"]',
+        '[contenteditable="true"][role="textbox"]',
+        '[contenteditable="true"]',
+    ]
+    for selector in selectors:
+        locator = page.locator(selector).last
+        try:
+            locator.wait_for(state="visible", timeout=3000)
+            try:
+                locator.fill(caption, timeout=3000)
+            except Exception:
+                locator.click()
+                page.keyboard.insert_text(caption)
+            return
+        except PlaywrightTimeoutError:
+            continue
+    textbox = page.get_by_role("textbox").last
+    textbox.click(timeout=5000)
+    page.keyboard.insert_text(caption)
+
+
+def _wait_for_post_shared(page) -> None:
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+    messages = [
+        "Your post has been shared",
+        "Your reel has been shared",
+        "你的帖子已分享",
+        "你的 Reels 已分享",
+    ]
+    for message in messages:
+        try:
+            page.get_by_text(message, exact=False).first.wait_for(
+                state="visible",
+                timeout=8000,
+            )
+            return
+        except PlaywrightTimeoutError:
+            continue
+    page.wait_for_timeout(5000)
+
+
 def post_image(media: str, caption: str = "") -> str:
     """Post a single image to Instagram feed via browser automation."""
     media_path = _resolve_media(media)
@@ -30,17 +140,11 @@ def post_image(media: str, caption: str = "") -> str:
     pw, browser, context, page = launch_browser()
     try:
         # Wait for page to load
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded", timeout=15000)
         time.sleep(2)
 
-        # Click the "Create" / "+" button
-        create_btn = page.locator(
-            'a[href="/accounts/create/"], '
-            '[aria-label="Create"], '
-            '[aria-label="New post"], '
-            'svg[aria-label="New post"]'
-        ).first
-        create_btn.click()
+        # Open the post composer.
+        _open_post_composer(page)
         time.sleep(2)
 
         # Upload file via the hidden file input
@@ -49,31 +153,23 @@ def post_image(media: str, caption: str = "") -> str:
         time.sleep(3)
 
         # Click "Next" (first time — after crop/adjust)
-        page.get_by_role("button", name="Next").first.click()
+        _click_next(page)
         time.sleep(2)
 
-        # Click "Next" again (after filters)
-        page.get_by_role("button", name="Next").first.click()
+        # Some Instagram variants have a second "Next" step after filters.
+        _click_next_if_present(page)
         time.sleep(2)
 
         # Type caption
         if caption:
-            caption_area = page.locator(
-                '[aria-label="Write a caption..."], '
-                'textarea[placeholder="Write a caption..."]'
-            ).first
-            caption_area.fill(caption)
+            _fill_caption(page, caption)
             time.sleep(1)
 
         # Click "Share"
-        page.get_by_role("button", name="Share").first.click()
+        _click_share(page)
 
-        # Wait for the success indicator
-        page.wait_for_selector(
-            '[aria-label="Your post has been shared"], '
-            'text="Your post has been shared"',
-            timeout=30000,
-        )
+        # Wait for the success indicator when Instagram shows one.
+        _wait_for_post_shared(page)
         time.sleep(2)
 
         return "Posted successfully"
@@ -91,7 +187,7 @@ def post_story(media: str) -> str:
 
     pw, browser, context, page = launch_browser()
     try:
-        page.wait_for_load_state("networkidle")
+        page.wait_for_load_state("domcontentloaded", timeout=15000)
         time.sleep(2)
 
         # Click the "Create" button
@@ -126,53 +222,44 @@ def post_story(media: str) -> str:
 
 
 def comment_on_post(username: str, text: str, post_index: int = 1) -> str:
-    """Comment on a user's post via the private API in the browser context."""
+    """Comment on a user's post via browser automation."""
     pw, browser, context, page = launch_browser()
     try:
-        page.wait_for_load_state("networkidle")
+        page.goto(f"{INSTAGRAM_URL}{username}/", wait_until="domcontentloaded", timeout=15000)
+        page.wait_for_timeout(5000)
 
-        # Use Instagram's internal API from within the browser (has auth cookies)
-        result = page.evaluate(f"""
-        async () => {{
-            const headers = {{
-                'X-IG-App-ID': '936619743392459',
-            }};
-            const opts = {{ credentials: 'include', headers }};
+        posts = page.locator(
+            'a[href^="/p/"], '
+            'a[href^="/reel/"], '
+            'a[href*="/p/"], '
+            'a[href*="/reel/"]'
+        )
+        if posts.count() < post_index:
+            raise RuntimeError(f"Post index {post_index} not found for @{username}")
 
-            const r1 = await fetch(
-                'https://www.instagram.com/api/v1/users/web_profile_info/?username='
-                + encodeURIComponent({username!r}), opts
-            );
-            if (!r1.ok) throw new Error('User not found: ' + {username!r});
-            const userId = (await r1.json())?.data?.user?.id;
+        post_href = posts.nth(post_index - 1).get_attribute("href")
+        if not post_href:
+            raise RuntimeError(f"Post index {post_index} has no link for @{username}")
+        page.goto(f"https://www.instagram.com{post_href}", wait_until="domcontentloaded", timeout=15000)
+        page.wait_for_timeout(5000)
 
-            const idx = {post_index - 1};
-            const r2 = await fetch(
-                'https://www.instagram.com/api/v1/feed/user/' + userId + '/?count=' + (idx + 1),
-                opts
-            );
-            const posts = (await r2.json())?.items || [];
-            if (idx >= posts.length) throw new Error('Post index ' + (idx + 1) + ' not found');
-            const pk = posts[idx].pk;
+        textarea = page.locator(
+            'textarea[aria-label="Add a comment…"]:visible, '
+            'textarea[aria-label="Add a comment..."]:visible, '
+            'textarea[placeholder="Add a comment…"]:visible, '
+            'textarea[placeholder="Add a comment..."]:visible, '
+            'textarea:visible'
+        ).first
+        textarea.click(timeout=10000)
+        textarea.fill(text)
 
-            const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
-            const r3 = await fetch(
-                'https://www.instagram.com/api/v1/web/comments/' + pk + '/add/',
-                {{
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: {{
-                        ...headers,
-                        'X-CSRFToken': csrf,
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    }},
-                    body: 'comment_text=' + encodeURIComponent({text!r}),
-                }}
-            );
-            if (!r3.ok) throw new Error('Comment failed: HTTP ' + r3.status);
-            return 'OK';
-        }}
-        """)
+        page.locator(
+            'button:has-text("Post"), '
+            'div[role="button"]:has-text("Post"), '
+            'button:has-text("发布"), '
+            'div[role="button"]:has-text("发布")'
+        ).first.click()
+        page.wait_for_timeout(5000)
 
         return f"Commented on @{username}'s post #{post_index}: {text}"
 

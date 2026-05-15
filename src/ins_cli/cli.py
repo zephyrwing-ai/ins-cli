@@ -102,6 +102,15 @@ def cmd_comment(args) -> None:
     print(result)
 
 
+def _add_format_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "-f", "--format",
+        choices=["table", "json", "plain"],
+        default=argparse.SUPPRESS,
+        help="Output format",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ins",
@@ -128,21 +137,25 @@ def build_parser() -> argparse.ArgumentParser:
     # --- Read ---
     p_profile = sub.add_parser("profile", help="Get user profile")
     p_profile.add_argument("username", help="Instagram username")
+    _add_format_option(p_profile)
     p_profile.set_defaults(func=cmd_profile)
 
     p_search = sub.add_parser("search", help="Search users")
     p_search.add_argument("query", help="Search query")
     p_search.add_argument("--count", type=int, default=10, help="Number of results")
+    _add_format_option(p_search)
     p_search.set_defaults(func=cmd_search)
 
     p_posts = sub.add_parser("posts", help="Get user's recent posts")
     p_posts.add_argument("username", help="Instagram username")
     p_posts.add_argument("--count", type=int, default=12, help="Number of posts")
+    _add_format_option(p_posts)
     p_posts.set_defaults(func=cmd_posts)
 
     p_comments = sub.add_parser("comments", help="Get comments on a post")
     p_comments.add_argument("media_id", help="Media ID of the post")
     p_comments.add_argument("--count", type=int, default=20, help="Number of comments")
+    _add_format_option(p_comments)
     p_comments.set_defaults(func=cmd_comments)
 
     # --- Write ---
